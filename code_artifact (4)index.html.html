@@ -1,0 +1,1016 @@
+<!DOCTYPE html>
+<html lang="zh-Hant" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>澳門智慧旅遊與體能導航系統 (Macau Smart Tourism & Health Navigation)</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Leaflet CSS & JS for Interactive Map -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <!-- Chart.js for Queue & Fatigue Analytics -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
+
+    <style>
+        body {
+            font-family: 'Noto Sans TC', 'Inter', sans-serif;
+            background-color: #090d16;
+            color: #f8fafc;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 5px;
+            height: 5px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0f172a;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 9999px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #475569;
+        }
+
+        /* Map Marker Pulse Effects */
+        .pulse-marker-green {
+            box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7);
+            animation: pulse-green 2s infinite;
+        }
+        .pulse-marker-yellow {
+            box-shadow: 0 0 0 0 rgba(234, 179, 8, 0.7);
+            animation: pulse-yellow 2s infinite;
+        }
+        .pulse-marker-red {
+            box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+            animation: pulse-red 2s infinite;
+        }
+
+        @keyframes pulse-green {
+            0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(34, 197, 94, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+        }
+        @keyframes pulse-yellow {
+            0% { box-shadow: 0 0 0 0 rgba(234, 179, 8, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(234, 179, 8, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(234, 179, 8, 0); }
+        }
+        @keyframes pulse-red {
+            0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+
+        .pulse-badge { animation: pulse-glow 2s infinite; }
+        .pulse-heart { animation: pulse-heartbeat 1.2s infinite; }
+        @keyframes pulse-glow {
+            0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+            70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+        @keyframes pulse-heartbeat {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.18); }
+        }
+
+        /* Leaflet Popups Style */
+        .leaflet-popup-content-wrapper, .leaflet-popup-tip {
+            background: #0f172a !important;
+            color: #f8fafc !important;
+            border: 1px solid #334155;
+            border-radius: 0.75rem !important;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+        }
+
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.88);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 flex justify-center items-center min-h-screen p-0 md:p-4 select-none">
+
+    <!-- Mobile App Container -->
+    <div class="w-full max-w-md bg-slate-900 min-h-screen md:min-h-[840px] md:max-h-[920px] md:rounded-3xl shadow-2xl border border-slate-800 flex flex-col relative overflow-hidden">
+
+        <!-- Global Navigation Header -->
+        <header class="bg-slate-950/90 backdrop-blur border-b border-slate-800 px-4 py-3 sticky top-0 z-40 flex justify-between items-center">
+            <div class="flex items-center space-x-2.5">
+                <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-amber-500 via-teal-500 to-indigo-500 flex items-center justify-center text-slate-950 font-bold shadow-md">
+                    <i class="fa-solid fa-compass text-base"></i>
+                </div>
+                <div>
+                    <h1 class="font-bold text-sm tracking-wide text-white leading-tight">澳門智慧特種兵導航</h1>
+                    <p class="text-[10px] text-slate-400 flex items-center gap-1">
+                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                        <span id="sync-status">IoT人流 & 體能數據同步中</span>
+                    </p>
+                </div>
+            </div>
+
+            <!-- Global Scenario Control Dropdown -->
+            <div class="relative">
+                <select id="scenario-selector" onchange="handleScenarioChange(this.value)" class="bg-slate-800 border border-slate-700 text-xs text-amber-400 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-amber-500 font-medium cursor-pointer shadow-sm">
+                    <option value="normal">🟢 漫遊模式 (正常人流/體能)</option>
+                    <option value="crowd">🔴 避堵模式 (景點暴增排隊)</option>
+                    <option value="fatigue">⚠️ 護航模式 (強行軍高疲勞)</option>
+                </select>
+            </div>
+        </header>
+
+        <!-- Dynamic Main Workspace Area -->
+        <main id="app-main-content" class="flex-1 relative flex flex-col overflow-hidden">
+
+            <!-- TAB 1: 地圖與熱點導航 (MAP & SPOTS) -->
+            <div id="tab-map" class="tab-pane flex-1 flex flex-col h-full relative">
+                <!-- Leaflet Interactive Map -->
+                <div class="relative flex-1 w-full h-full min-h-[280px]">
+                    <div id="macau-map" class="w-full h-full z-10"></div>
+
+                    <!-- Map Style Switcher Floating Buttons -->
+                    <div class="absolute top-3 right-3 z-20 flex flex-col gap-1.5">
+                        <div class="glass-panel p-1 rounded-xl flex flex-col gap-1 shadow-lg text-[10px]">
+                            <button onclick="setMapTileStyle('osm')" class="px-2 py-1 rounded-lg font-medium bg-amber-500 text-slate-950 shadow transition flex items-center gap-1">
+                                <i class="fa-solid fa-map"></i> 標準
+                            </button>
+                            <button onclick="setMapTileStyle('voyager')" class="px-2 py-1 rounded-lg font-medium text-slate-300 hover:bg-slate-800 transition flex items-center gap-1">
+                                <i class="fa-solid fa-compass"></i> 淺色
+                            </button>
+                            <button onclick="setMapTileStyle('dark')" class="px-2 py-1 rounded-lg font-medium text-slate-300 hover:bg-slate-800 transition flex items-center gap-1">
+                                <i class="fa-solid fa-moon"></i> 暗色
+                            </button>
+                        </div>
+                        <button onclick="recenterMap()" class="w-8 h-8 rounded-xl glass-panel text-slate-200 flex items-center justify-center shadow-lg hover:text-amber-400 transition self-end">
+                            <i class="fa-solid fa-crosshairs text-xs"></i>
+                        </button>
+                    </div>
+
+                    <!-- Active Route Banner Overlay -->
+                    <div id="route-info-panel" class="hidden absolute top-3 left-3 right-14 z-20 glass-panel p-2.5 rounded-2xl shadow-xl border border-amber-500/40">
+                        <div class="flex items-start justify-between">
+                            <div>
+                                <span id="route-cat-badge" class="px-1.5 py-0.2 text-[9px] rounded font-bold uppercase bg-amber-500/20 text-amber-400 border border-amber-500/30">目的地</span>
+                                <h3 id="route-target-title" class="text-xs font-bold text-white mt-0.5">目的地名稱</h3>
+                            </div>
+                            <button onclick="closeRoutePanel()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-xs"></i></button>
+                        </div>
+                        <div class="grid grid-cols-2 gap-1 my-1.5 p-1 bg-slate-950/80 rounded-xl text-center text-[10px]">
+                            <div>步行約 <span id="route-walk-info" class="font-bold text-amber-400">0.8 km</span></div>
+                            <div class="border-l border-slate-800">預計 <span id="route-drive-info" class="font-bold text-sky-400">12 分鐘</span></div>
+                        </div>
+                        <div class="flex gap-1.5">
+                            <button onclick="addCurrentSpotToItinerary()" class="flex-1 py-1 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg text-[10px] flex items-center justify-center gap-1">
+                                <i class="fa-solid fa-plus"></i> 加入行程
+                            </button>
+                            <button onclick="showSpotDetailModal(selectedSpotId)" class="px-2 py-1 bg-slate-800 text-slate-200 rounded-lg text-[10px] border border-slate-700">
+                                詳細趨勢
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Bottom Drawer Hotspot List -->
+                <div class="bg-slate-900 border-t border-slate-800 flex flex-col h-[48%] flex-shrink-0 z-20 shadow-2xl">
+                    <!-- Region Chips Bar -->
+                    <div class="px-3 py-1.5 border-b border-slate-800/80 bg-slate-950/60 flex items-center space-x-1.5 overflow-x-auto no-scrollbar text-[11px]">
+                        <button onclick="filterByRegion('all')" class="region-chip bg-amber-500 text-slate-950 font-bold px-2.5 py-0.5 rounded-full flex-shrink-0">全部地區</button>
+                        <button onclick="filterByRegion('macau_peninsula')" class="region-chip bg-slate-800 text-slate-300 px-2.5 py-0.5 rounded-full flex-shrink-0">澳門半島</button>
+                        <button onclick="filterByRegion('cotai')" class="region-chip bg-slate-800 text-slate-300 px-2.5 py-0.5 rounded-full flex-shrink-0">路氹金光大道</button>
+                        <button onclick="filterByRegion('taipa')" class="region-chip bg-slate-800 text-slate-300 px-2.5 py-0.5 rounded-full flex-shrink-0">氹仔舊城區</button>
+                        <button onclick="filterByRegion('coloane')" class="region-chip bg-slate-800 text-slate-300 px-2.5 py-0.5 rounded-full flex-shrink-0">路環</button>
+                    </div>
+
+                    <!-- Search & Filter Controls -->
+                    <div class="px-3 py-1.5 border-b border-slate-800 flex items-center justify-between gap-2 bg-slate-900">
+                        <div class="relative flex-1">
+                            <i class="fa-solid fa-magnifying-glass absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-[10px]"></i>
+                            <input type="text" id="map-search-input" onkeyup="handleSpotSearch()" placeholder="搜尋景點、美食或靜心點..." 
+                                class="w-full pl-7 pr-3 py-1 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-amber-500">
+                        </div>
+                        <div class="flex items-center space-x-1 bg-slate-950 p-0.5 rounded-xl border border-slate-800 text-[10px]">
+                            <button onclick="filterByCategory('all')" class="cat-chip px-2 py-0.5 rounded-lg bg-amber-500 text-slate-950 font-bold">全部</button>
+                            <button onclick="filterByCategory('attraction')" class="cat-chip px-2 py-0.5 rounded-lg text-slate-400">景點</button>
+                            <button onclick="filterByCategory('food')" class="cat-chip px-2 py-0.5 rounded-lg text-slate-400">美食</button>
+                            <button onclick="filterByCategory('rest')" class="cat-chip px-2 py-0.5 rounded-lg text-slate-400">靜心點</button>
+                        </div>
+                    </div>
+
+                    <!-- Hotspots Cards List -->
+                    <div id="hotspot-list-container" class="flex-1 overflow-y-auto p-2.5 space-y-2">
+                        <!-- Populated via JS -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 2: AI 智慧行程規劃 (SMART ITINERARY) -->
+            <div id="tab-itinerary" class="tab-pane hidden flex-1 flex flex-col h-full bg-slate-950 p-3.5 overflow-y-auto space-y-4">
+                
+                <!-- Crowd Emergency Alert Banner -->
+                <div id="crowd-alert-banner" class="hidden bg-gradient-to-r from-red-600 to-rose-700 text-white p-3.5 rounded-2xl shadow-lg relative overflow-hidden transition-all duration-300">
+                    <div class="flex items-center justify-between mb-1">
+                        <span class="bg-white text-red-600 text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider pulse-badge">
+                            <i class="fa-solid fa-bell mr-1"></i> 避堵機制動態啟動
+                        </span>
+                        <span class="text-[9px] text-red-100">即時監測</span>
+                    </div>
+                    <h3 class="font-bold text-xs mb-1">大三巴牌坊現場人潮暴增 (等待 > 50 分鐘)</h3>
+                    <p class="text-[11px] text-red-100 mb-2.5">系統已為您檢索周邊隱藏美食與冷門景點替代方案。</p>
+                    
+                    <div class="bg-black/20 backdrop-blur-md rounded-xl p-2.5 border border-white/20 flex flex-col gap-2">
+                        <div>
+                            <div class="text-[9px] font-medium text-red-200">推薦最佳替代路線</div>
+                            <h4 class="font-bold text-xs text-white">福隆新街葡國餐館 & 巷弄文創街區</h4>
+                            <p class="text-[9px] text-white/90">步行僅 6 分鐘，免排隊省時 42 分鐘。</p>
+                        </div>
+                        <button onclick="applyCrowdAlternative()" class="w-full bg-white text-red-600 hover:bg-red-50 font-bold py-1.5 rounded-lg text-xs transition shadow-sm">
+                            一鍵替換行程
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Custom Spot Entry & TSP Route Optimizer -->
+                <div class="bg-slate-900 rounded-2xl p-3.5 border border-slate-800 space-y-3">
+                    <div class="flex justify-between items-center">
+                        <h2 class="font-bold text-slate-200 text-xs flex items-center">
+                            <i class="fa-solid fa-route text-indigo-400 mr-1.5"></i> 自訂景點與 TSP 路徑優化
+                        </h2>
+                        <span class="text-[10px] text-indigo-300 bg-indigo-950 px-2 py-0.5 rounded-full border border-indigo-800">AI 算法賦能</span>
+                    </div>
+
+                    <div class="flex gap-2">
+                        <input type="text" id="new-spot-input" placeholder="新增想去的地方..." class="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-indigo-500">
+                        <button onclick="addCustomSpot()" class="bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-xl text-xs font-medium transition flex items-center shadow-sm">
+                            <i class="fa-solid fa-plus mr-1"></i> 新增
+                        </button>
+                    </div>
+
+                    <!-- Stop List Chips -->
+                    <div id="stop-list-container" class="space-y-1.5">
+                        <!-- Populated via JS -->
+                    </div>
+
+                    <button onclick="optimizeTSPRoute()" class="w-full bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-medium py-2 rounded-xl shadow-md text-xs transition flex items-center justify-center">
+                        <i class="fa-solid fa-wand-magic-sparkles mr-1.5"></i> 執行 TSP AI 最佳路徑排序
+                    </button>
+                </div>
+
+                <!-- Today's Live Itinerary Timeline -->
+                <div class="bg-slate-900 rounded-2xl p-3.5 border border-slate-800 space-y-3">
+                    <div class="flex justify-between items-center">
+                        <h2 class="font-bold text-slate-200 text-xs flex items-center">
+                            <i class="fa-solid fa-calendar-check text-indigo-400 mr-1.5"></i> 今日動態行程時間軸
+                        </h2>
+                        <span id="time-savings-badge" class="text-[10px] font-medium bg-emerald-950 text-emerald-400 border border-emerald-800 px-2 py-0.5 rounded-full">
+                            <i class="fa-solid fa-clock mr-1"></i> 預計省時 35 分
+                        </span>
+                    </div>
+
+                    <div id="itinerary-timeline-container" class="space-y-3 relative before:absolute before:inset-0 before:left-3.5 before:w-0.5 before:bg-slate-800">
+                        <!-- Dynamic Timeline Items -->
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- TAB 3: 康旅體能防護 (HEALTH & STAMINA) -->
+            <div id="tab-health" class="tab-pane hidden flex-1 flex flex-col h-full bg-slate-950 p-3.5 overflow-y-auto space-y-4">
+                
+                <!-- Health Dynamic Dashboard -->
+                <div class="bg-gradient-to-br from-slate-900 to-slate-950 text-white rounded-2xl p-4 border border-slate-800 shadow-md space-y-3 relative overflow-hidden">
+                    <div class="flex justify-between items-center">
+                        <div class="flex items-center space-x-2">
+                            <div class="bg-emerald-500/20 text-emerald-400 p-1.5 rounded-lg border border-emerald-500/30">
+                                <i class="fa-solid fa-heart-pulse pulse-heart text-xs"></i>
+                            </div>
+                            <span class="text-xs font-semibold text-slate-200">Apple / Google Health 即時聯動</span>
+                        </div>
+                        <span id="slope-badge" class="text-[9px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-full flex items-center">
+                            <i class="fa-solid fa-mountain mr-1"></i> 含東望洋高陡坡
+                        </span>
+                    </div>
+
+                    <!-- Metrics Grid -->
+                    <div class="grid grid-cols-3 gap-2">
+                        <div class="bg-slate-950/80 p-2.5 rounded-xl border border-slate-800">
+                            <div class="text-[9px] text-slate-400 mb-0.5">當日總步數</div>
+                            <div class="text-sm font-bold text-emerald-400 flex items-baseline">
+                                <span id="val-steps">8,640</span> <span class="text-[9px] ml-0.5 text-slate-500">步</span>
+                            </div>
+                        </div>
+                        <div class="bg-slate-950/80 p-2.5 rounded-xl border border-slate-800">
+                            <div class="text-[9px] text-slate-400 mb-0.5">行走距離</div>
+                            <div class="text-sm font-bold text-cyan-400 flex items-baseline">
+                                <span id="val-distance">6.2</span> <span class="text-[9px] ml-0.5 text-slate-500">km</span>
+                            </div>
+                        </div>
+                        <div class="bg-slate-950/80 p-2.5 rounded-xl border border-slate-800">
+                            <div class="text-[9px] text-slate-400 mb-0.5">熱量消耗</div>
+                            <div class="text-sm font-bold text-orange-400 flex items-baseline">
+                                <span id="val-calories">485</span> <span class="text-[9px] ml-0.5 text-slate-500">kcal</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Fatigue Index Bar -->
+                    <div>
+                        <div class="flex justify-between items-center text-xs mb-1">
+                            <span class="font-medium text-slate-300 flex items-center text-[11px]">
+                                <i class="fa-solid fa-battery-half mr-1 text-amber-400"></i> 動態體能疲勞負擔
+                            </span>
+                            <span id="fatigue-score-text" class="font-bold text-red-400 text-xs">84% (高疲勞超載)</span>
+                        </div>
+                        <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden p-0.5">
+                            <div id="fatigue-score-bar" class="bg-gradient-to-r from-emerald-400 via-amber-400 to-red-500 h-full rounded-full transition-all duration-500" style="width: 84%"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- High Fatigue Warning Banner -->
+                <div id="fatigue-alert-banner" class="bg-red-500/20 border border-red-500/40 text-white p-3.5 rounded-2xl shadow-md relative overflow-hidden">
+                    <div class="flex items-center justify-between mb-1">
+                        <span class="bg-red-500 text-white text-[9px] font-bold px-2 py-0.5 rounded-full pulse-badge">
+                            <i class="fa-solid fa-triangle-exclamation mr-1"></i> 高體能負荷預警
+                        </span>
+                        <span class="text-[9px] text-red-200">連續爬坡強行軍</span>
+                    </div>
+                    <h3 class="font-bold text-xs mb-1">您已連續行走超過 8,600 步且無休息記錄</h3>
+                    <p class="text-[11px] text-red-200 mb-2">配合地形陡坡，心率負荷偏高！建議停靠周邊「康旅靜心點」補水休養 20 分鐘。</p>
+                </div>
+
+                <!-- Rest Points Recommendations -->
+                <div class="bg-slate-900 rounded-2xl p-3.5 border border-slate-800 space-y-3">
+                    <div class="flex justify-between items-center">
+                        <h2 class="font-bold text-slate-200 text-xs flex items-center">
+                            <i class="fa-solid fa-spa text-emerald-400 mr-1.5"></i> 周邊「康旅靜心點」動態推薦
+                        </h2>
+                        <span class="text-[9px] text-slate-400">依安靜度與距離綜合篩選</span>
+                    </div>
+
+                    <!-- Rest Spot 1 -->
+                    <div class="bg-emerald-950/40 border border-emerald-800/60 rounded-xl p-3 space-y-2">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <span class="bg-emerald-600 text-white text-[8px] font-bold px-1.5 py-0.2 rounded">公園園林</span>
+                                <h3 class="font-bold text-emerald-200 text-xs mt-0.5">盧廉若公園 • 亭台水榭區</h3>
+                                <p class="text-[10px] text-slate-300 mt-0.5">環境幽靜、長椅充足、樹蔭覆蓋率 90%</p>
+                            </div>
+                            <span class="text-right flex-shrink-0">
+                                <span class="text-xs font-bold text-emerald-400 block">步行 150m</span>
+                                <span class="text-[9px] text-slate-400">約 2 分鐘</span>
+                            </span>
+                        </div>
+                        <div class="pt-2 border-t border-emerald-900/80 flex justify-between items-center">
+                            <div class="text-[9px] text-emerald-300/80">建議休息: <strong>25分鐘</strong> • 靜謐度高</div>
+                            <button onclick="insertRestToItinerary('盧廉若公園 • 亭台水榭區', 25)" class="bg-emerald-600 hover:bg-emerald-500 text-white px-2.5 py-1 rounded-lg text-[10px] font-medium transition flex items-center">
+                                <i class="fa-solid fa-bed mr-1"></i> 排入休養行程
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Rest Spot 2 -->
+                    <div class="bg-slate-950/60 border border-slate-800 rounded-xl p-3 space-y-2">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <span class="bg-teal-600 text-white text-[8px] font-bold px-1.5 py-0.2 rounded">傳統茶座</span>
+                                <h3 class="font-bold text-slate-200 text-xs mt-0.5">老街靜心涼茶老店</h3>
+                                <p class="text-[10px] text-slate-400 mt-0.5">冷氣開放、提供養生草本茶飲與充電座</p>
+                            </div>
+                            <span class="text-right flex-shrink-0">
+                                <span class="text-xs font-bold text-teal-400 block">步行 280m</span>
+                                <span class="text-[9px] text-slate-400">約 4 分鐘</span>
+                            </span>
+                        </div>
+                        <div class="pt-2 border-t border-slate-800 flex justify-between items-center">
+                            <div class="text-[9px] text-slate-400">建議休息: <strong>20分鐘</strong> • 特種兵9折</div>
+                            <button onclick="insertRestToItinerary('老街靜心涼茶老店', 20)" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-2.5 py-1 rounded-lg text-[10px] font-medium transition flex items-center">
+                                <i class="fa-solid fa-bed mr-1"></i> 排入休養行程
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Rest Spot 3 -->
+                    <div class="bg-slate-950/60 border border-slate-800 rounded-xl p-3 space-y-2">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <span class="bg-sky-600 text-white text-[8px] font-bold px-1.5 py-0.2 rounded">廟宇庭院</span>
+                                <h3 class="font-bold text-slate-200 text-xs mt-0.5">古剎靜心迴廊</h3>
+                                <p class="text-[10px] text-slate-400 mt-0.5">木椅休息區、涼爽通風、提供奉茶與洗手洗手間</p>
+                            </div>
+                            <span class="text-right flex-shrink-0">
+                                <span class="text-xs font-bold text-sky-400 block">步行 350m</span>
+                                <span class="text-[9px] text-slate-400">約 5 分鐘</span>
+                            </span>
+                        </div>
+                        <div class="pt-2 border-t border-slate-800 flex justify-between items-center">
+                            <div class="text-[9px] text-slate-400">建議休息: <strong>15分鐘</strong> • 自然蔭涼</div>
+                            <button onclick="insertRestToItinerary('古剎靜心迴廊', 15)" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-2.5 py-1 rounded-lg text-[10px] font-medium transition flex items-center">
+                                <i class="fa-solid fa-bed mr-1"></i> 排入休養行程
+                            </button>
+                        </div>
+                    </div>
+
+                </div>
+
+            </div>
+
+            <!-- TAB 4: 全澳人流大數據 (ANALYTICS) -->
+            <div id="tab-analytics" class="tab-pane hidden flex-1 flex flex-col h-full bg-slate-950 p-3.5 overflow-y-auto space-y-3.5">
+                <div class="flex justify-between items-center">
+                    <h2 class="text-xs font-bold text-white flex items-center gap-1.5">
+                        <i class="fa-solid fa-chart-line text-amber-400"></i> 人流與排隊趨勢大數據
+                    </h2>
+                    <span class="text-[10px] text-slate-400">IoT 實時感應</span>
+                </div>
+
+                <!-- Crowd Ranking Leaderboard -->
+                <div class="bg-slate-900 p-3.5 rounded-2xl border border-slate-800 space-y-2.5">
+                    <h3 class="text-xs font-semibold text-slate-200 flex justify-between items-center">
+                        <span>🔥 熱點擁擠度即時排行榜</span>
+                        <span class="text-[9px] text-slate-400">前 5 名</span>
+                    </h3>
+                    <div id="analytics-ranking-list" class="space-y-2">
+                        <!-- Populated via JS -->
+                    </div>
+                </div>
+
+                <!-- Hourly Queue Trend Chart Card -->
+                <div class="bg-slate-900 p-3.5 rounded-2xl border border-slate-800 space-y-2">
+                    <div class="flex justify-between items-center">
+                        <h3 class="text-xs font-semibold text-slate-200">📈 大三巴 vs 替代景點 (全天排隊時長)</h3>
+                        <span class="text-[9px] text-amber-400">避堵對比</span>
+                    </div>
+                    <div class="h-44 w-full">
+                        <canvas id="crowdTrendChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+        </main>
+
+        <!-- Spot Detail Modal Dialog -->
+        <div id="spot-modal" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+            <div class="bg-slate-900 border border-slate-800 w-full max-w-sm rounded-2xl p-4 shadow-2xl space-y-3 relative max-h-[90vh] overflow-y-auto">
+                <button onclick="closeSpotModal()" class="absolute top-3 right-3 text-slate-400 hover:text-white p-1">
+                    <i class="fa-solid fa-xmark text-sm"></i>
+                </button>
+                <div class="flex items-center space-x-2">
+                    <span id="modal-cat-badge" class="px-2 py-0.5 text-[9px] font-bold rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">景點</span>
+                    <h2 id="modal-title" class="text-sm font-bold text-white">景點名稱</h2>
+                </div>
+                <p id="modal-desc" class="text-xs text-slate-300">景點簡介...</p>
+                
+                <div class="grid grid-cols-2 gap-2 p-2 bg-slate-950 rounded-xl text-center border border-slate-800 text-[10px]">
+                    <div>當前狀態: <span id="modal-status" class="font-bold text-emerald-400">暢通</span></div>
+                    <div>預估等待: <span id="modal-wait" class="font-bold text-amber-400">10 分鐘</span></div>
+                </div>
+
+                <div class="space-y-1">
+                    <div class="text-[10px] font-semibold text-slate-400">24小時排隊時長趨勢預測</div>
+                    <div class="h-32 w-full">
+                        <canvas id="modalChart"></canvas>
+                    </div>
+                </div>
+
+                <button onclick="addModalSpotToItinerary()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 rounded-xl text-xs transition shadow-md flex items-center justify-center gap-1.5">
+                    <i class="fa-solid fa-calendar-plus"></i> 將此地點排入今日行程
+                </button>
+            </div>
+        </div>
+
+        <!-- Bottom Tab Navigation Bar -->
+        <nav class="bg-slate-950 border-t border-slate-800 px-2 py-2 flex justify-around items-center z-40">
+            <button onclick="switchTab('map')" id="nav-btn-map" class="nav-btn flex flex-col items-center space-y-1 text-amber-400 transition">
+                <i class="fa-solid fa-map-location-dot text-base"></i>
+                <span class="text-[10px] font-medium">地圖導航</span>
+            </button>
+            <button onclick="switchTab('itinerary')" id="nav-btn-itinerary" class="nav-btn flex flex-col items-center space-y-1 text-slate-400 hover:text-slate-200 transition">
+                <i class="fa-solid fa-route text-base"></i>
+                <span class="text-[10px] font-medium">AI 行程</span>
+            </button>
+            <button onclick="switchTab('health')" id="nav-btn-health" class="nav-btn flex flex-col items-center space-y-1 text-slate-400 hover:text-slate-200 transition relative">
+                <span id="health-alert-dot" class="w-2 h-2 rounded-full bg-red-500 absolute top-0 right-2 animate-ping"></span>
+                <i class="fa-solid fa-heart-pulse text-base"></i>
+                <span class="text-[10px] font-medium">體能防護</span>
+            </button>
+            <button onclick="switchTab('analytics')" id="nav-btn-analytics" class="nav-btn flex flex-col items-center space-y-1 text-slate-400 hover:text-slate-200 transition">
+                <i class="fa-solid fa-chart-line text-base"></i>
+                <span class="text-[10px] font-medium">人流趨勢</span>
+            </button>
+        </nav>
+
+    </div>
+
+    <script>
+        // Global State & Data Store
+        let currentTab = 'map';
+        let currentScenario = 'normal'; // 'normal', 'crowd', 'fatigue'
+        let currentRegionFilter = 'all';
+        let currentCategoryFilter = 'all';
+        let macauMap = null;
+        let mapMarkers = [];
+        let selectedSpotId = null;
+        let crowdChartInstance = null;
+        let modalChartInstance = null;
+
+        // Master Hotspot Database
+        const spotsData = [
+            { id: 1, name: "大三巴牌坊", region: "macau_peninsula", cat: "attraction", lat: 22.1977, lng: 113.5408, crowd: "green", waitTime: 10, desc: "澳門地標世界遺產聖保祿教堂遺址", queueTrend: [5,10,25,45,55,50,30,15] },
+            { id: 2, name: "官也街美食街", region: "taipa", cat: "food", lat: 22.1536, lng: 113.5568, crowd: "yellow", waitTime: 25, desc: "著名手信與葡式美食特色步行街", queueTrend: [10,20,35,40,45,30,20,10] },
+            { id: 3, name: "威尼斯人度假村", region: "cotai", cat: "attraction", lat: 22.1481, lng: 113.5600, crowd: "yellow", waitTime: 20, desc: "大運河購物中心與娛樂綜合體", queueTrend: [15,25,30,35,30,25,20,15] },
+            { id: 4, name: "媽閣廟", region: "macau_peninsula", cat: "attraction", lat: 22.1862, lng: 113.5312, crowd: "green", waitTime: 5, desc: "澳門最古老的道教廟宇", queueTrend: [5,5,10,15,10,5,5,5] },
+            { id: 5, name: "福隆新街葡國餐館", region: "macau_peninsula", cat: "food", lat: 22.1938, lng: 113.5385, crowd: "green", waitTime: 0, desc: "清代紅窗門古街與葡國懷舊美食", queueTrend: [0,5,10,15,10,5,0,0] },
+            { id: 6, name: "安德魯餅店 (路環)", region: "coloane", cat: "food", lat: 22.1172, lng: 113.5518, crowd: "green", waitTime: 10, desc: "正宗澳門葡撻創始店", queueTrend: [5,10,20,25,20,15,10,5] },
+            { id: 7, name: "盧廉若公園 • 靜心水榭", region: "macau_peninsula", cat: "rest", lat: 22.1998, lng: 113.5463, crowd: "green", waitTime: 0, desc: "蘇州園林風格，幽靜宜人高蔭蔽率", queueTrend: [0,0,5,5,5,0,0,0] },
+            { id: 8, name: "東望洋燈塔", region: "macau_peninsula", cat: "attraction", lat: 22.1963, lng: 113.5497, crowd: "green", waitTime: 10, desc: "中國沿海最古老燈塔，俯瞰澳門全景", queueTrend: [5,10,15,20,15,10,5,0] },
+            { id: 9, name: "老街靜心涼茶老店", region: "macau_peninsula", cat: "rest", lat: 22.1960, lng: 113.5420, crowd: "green", waitTime: 0, desc: "提供草本涼茶與空調休息座椅", queueTrend: [0,0,0,5,0,0,0,0] }
+        ];
+
+        // Active User Itinerary Data
+        let itinerarySpots = [
+            { id: 101, spotId: 1, name: "大三巴牌坊", time: "停留 45 分鐘", wait: "排隊 10 分鐘", tag: "最佳造訪時段", isRest: false },
+            { id: 102, spotId: 8, name: "東望洋燈塔 (陡坡段)", time: "停留 50 分鐘", wait: "排隊 15 分鐘", tag: "坡度 +15% 體能高消耗", isRest: false },
+            { id: 103, spotId: 2, name: "官也街美食散策", time: "停留 60 分鐘", tag: "預估 4,000 步", wait: "排隊 20 分鐘", isRest: false }
+        ];
+
+        window.onload = function() {
+            initMap();
+            renderSpotList();
+            renderItineraryTimeline();
+            renderAnalyticsRanking();
+            initAnalyticsChart();
+        };
+
+        // Initialize Leaflet Map
+        function initMap() {
+            macauMap = L.map('macau-map', {
+                zoomControl: false
+            }).setView([22.1910, 113.5420], 14);
+
+            setMapTileStyle('osm');
+            updateMapMarkers();
+        }
+
+        function setMapTileStyle(style) {
+            if (!macauMap) return;
+            macauMap.eachLayer((layer) => {
+                if (layer instanceof L.TileLayer) {
+                    macauMap.removeLayer(layer);
+                }
+            });
+
+            let tileUrl = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+            if (style === 'voyager') {
+                tileUrl = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
+            } else if (style === 'dark') {
+                tileUrl = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
+            }
+            L.tileLayer(tileUrl, { maxZoom: 18, attribution: '&copy; OpenStreetMap' }).addTo(macauMap);
+        }
+
+        function recenterMap() {
+            if (macauMap) {
+                macauMap.flyTo([22.1910, 113.5420], 14, { duration: 1 });
+            }
+        }
+
+        function updateMapMarkers() {
+            mapMarkers.forEach(m => macauMap.removeLayer(m));
+            mapMarkers = [];
+
+            const filtered = spotsData.filter(spot => {
+                const matchRegion = currentRegionFilter === 'all' || spot.region === currentRegionFilter;
+                const matchCat = currentCategoryFilter === 'all' || spot.cat === currentCategoryFilter;
+                return matchRegion && matchCat;
+            });
+
+            filtered.forEach(spot => {
+                let colorClass = 'pulse-marker-green bg-emerald-500';
+                if (spot.crowd === 'yellow') colorClass = 'pulse-marker-yellow bg-amber-500';
+                if (spot.crowd === 'red') colorClass = 'pulse-marker-red bg-red-500';
+
+                const customIcon = L.divIcon({
+                    className: 'custom-map-pin',
+                    html: `<div class="w-4 h-4 rounded-full border-2 border-white shadow-lg ${colorClass}"></div>`,
+                    iconSize: [16, 16],
+                    iconAnchor: [8, 8]
+                });
+
+                const marker = L.marker([spot.lat, spot.lng], { icon: customIcon }).addTo(macauMap);
+                marker.on('click', () => selectSpotOnMap(spot));
+                mapMarkers.push(marker);
+            });
+        }
+
+        function selectSpotOnMap(spot) {
+            selectedSpotId = spot.id;
+            document.getElementById('route-target-title').innerText = spot.name;
+            document.getElementById('route-cat-badge').innerText = spot.cat === 'food' ? '美食' : (spot.cat === 'rest' ? '靜心點' : '景點');
+            document.getElementById('route-walk-info').innerText = `${(Math.random() * 0.8 + 0.2).toFixed(1)} km`;
+            document.getElementById('route-drive-info').innerText = `${Math.floor(Math.random() * 10 + 5)} 分鐘`;
+            document.getElementById('route-info-panel').classList.remove('hidden');
+
+            macauMap.flyTo([spot.lat, spot.lng], 16, { duration: 0.8 });
+        }
+
+        function closeRoutePanel() {
+            document.getElementById('route-info-panel').classList.add('hidden');
+        }
+
+        function renderSpotList() {
+            const container = document.getElementById('hotspot-list-container');
+            const searchVal = (document.getElementById('map-search-input')?.value || '').toLowerCase();
+
+            const filtered = spotsData.filter(spot => {
+                const matchRegion = currentRegionFilter === 'all' || spot.region === currentRegionFilter;
+                const matchCat = currentCategoryFilter === 'all' || spot.cat === currentCategoryFilter;
+                const matchSearch = spot.name.toLowerCase().includes(searchVal) || spot.desc.toLowerCase().includes(searchVal);
+                return matchRegion && matchCat && matchSearch;
+            });
+
+            container.innerHTML = filtered.map(spot => {
+                let badgeColor = 'bg-emerald-950 text-emerald-400 border-emerald-800';
+                let crowdText = '暢通 (排隊 < 5分)';
+                if (spot.crowd === 'yellow') {
+                    badgeColor = 'bg-amber-950 text-amber-400 border-amber-800';
+                    crowdText = `一般 (排隊 ${spot.waitTime}分)`;
+                } else if (spot.crowd === 'red') {
+                    badgeColor = 'bg-red-950 text-red-400 border-red-800';
+                    crowdText = `擁擠 (排隊 ${spot.waitTime}分)`;
+                }
+
+                return `
+                <div class="bg-slate-950 border border-slate-800 rounded-xl p-2.5 hover:border-amber-500/50 transition cursor-pointer flex justify-between items-center" onclick="selectSpotOnMap(spotsData.find(s=>s.id===${spot.id}))">
+                    <div class="flex-1 pr-2">
+                        <div class="flex items-center space-x-1.5">
+                            <h4 class="font-bold text-xs text-slate-100">${spot.name}</h4>
+                            <span class="text-[8px] border px-1.5 py-0.2 rounded-full ${badgeColor}">${crowdText}</span>
+                        </div>
+                        <p class="text-[10px] text-slate-400 mt-0.5 line-clamp-1">${spot.desc}</p>
+                    </div>
+                    <button onclick="event.stopPropagation(); addSpotToItineraryDirect(${spot.id})" class="bg-slate-800 hover:bg-slate-700 text-amber-400 text-[10px] px-2 py-1 rounded-lg border border-slate-700 font-medium">
+                        + 排入
+                    </button>
+                </div>
+                `;
+            }).join('');
+        }
+
+        function handleScenarioChange(val) {
+            currentScenario = val;
+            const crowdAlert = document.getElementById('crowd-alert-banner');
+            const fatigueAlert = document.getElementById('fatigue-alert-banner');
+            const fatigueBar = document.getElementById('fatigue-score-bar');
+            const fatigueText = document.getElementById('fatigue-score-text');
+            const stepsVal = document.getElementById('val-steps');
+
+            if (val === 'crowd') {
+                // High crowd scenario
+                spotsData[0].crowd = 'red';
+                spotsData[0].waitTime = 52;
+                crowdAlert.classList.remove('hidden');
+                fatigueAlert.classList.add('hidden');
+                showToast("已調至「避堵模式」: 大三巴景點暴增排隊！");
+            } else if (val === 'fatigue') {
+                // High fatigue scenario
+                spotsData[0].crowd = 'yellow';
+                spotsData[0].waitTime = 20;
+                crowdAlert.classList.add('hidden');
+                fatigueAlert.classList.remove('hidden');
+                fatigueBar.style.width = '88%';
+                fatigueText.innerText = '88% (強行軍極限)';
+                fatigueText.className = 'font-bold text-red-400 text-xs';
+                stepsVal.innerText = '11,240';
+                showToast("已調至「護航模式」: 步數過高，建議休養！");
+            } else {
+                // Normal
+                spotsData[0].crowd = 'green';
+                spotsData[0].waitTime = 10;
+                crowdAlert.classList.add('hidden');
+                fatigueAlert.classList.add('hidden');
+                fatigueBar.style.width = '28%';
+                fatigueText.innerText = '28% (體能充沛)';
+                fatigueText.className = 'font-bold text-emerald-400 text-xs';
+                stepsVal.innerText = '3,200';
+                showToast("已調至「漫遊模式」: 人流與體能正常。");
+            }
+
+            updateMapMarkers();
+            renderSpotList();
+            renderItineraryTimeline();
+            renderAnalyticsRanking();
+        }
+
+        function renderItineraryTimeline() {
+            const container = document.getElementById('itinerary-timeline-container');
+            const stopList = document.getElementById('stop-list-container');
+
+            // Render stop chips in itinerary settings
+            stopList.innerHTML = itinerarySpots.map((item, idx) => `
+                <div class="flex items-center justify-between bg-slate-950 px-2.5 py-1 rounded-xl border border-slate-800 text-xs">
+                    <div class="flex items-center space-x-2 truncate">
+                        <span class="w-4 h-4 rounded-full ${item.isRest ? 'bg-emerald-500' : 'bg-indigo-600'} text-white text-[9px] flex items-center justify-center font-bold">${idx + 1}</span>
+                        <span class="text-slate-200 font-medium truncate text-[11px]">${item.name}</span>
+                    </div>
+                    <button onclick="removeItineraryItem(${item.id})" class="text-slate-500 hover:text-red-400 text-[10px]"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+            `).join('');
+
+            // Render visual timeline
+            container.innerHTML = itinerarySpots.map((item, idx) => {
+                if (item.isRest) {
+                    return `
+                    <div class="relative flex items-start space-x-2.5 z-10">
+                        <div class="w-6 h-6 rounded-full bg-emerald-500 text-slate-950 flex items-center justify-center font-bold text-[9px] shadow-lg animate-pulse flex-shrink-0">
+                            <i class="fa-solid fa-spa"></i>
+                        </div>
+                        <div class="flex-1 bg-emerald-950/40 border border-emerald-800/80 rounded-xl p-2.5">
+                            <div class="flex justify-between items-center">
+                                <h3 class="font-bold text-emerald-200 text-xs">${item.name}</h3>
+                                <button onclick="removeItineraryItem(${item.id})" class="text-emerald-500 hover:text-red-400 text-[9px]"><i class="fa-solid fa-trash"></i></button>
+                            </div>
+                            <p class="text-[10px] text-emerald-400 mt-0.5"><i class="fa-regular fa-clock mr-1"></i>${item.time}</p>
+                            <span class="text-[9px] text-emerald-300 bg-emerald-900/50 px-1.5 py-0.2 rounded mt-1 inline-block">心率與體能快速恢復中</span>
+                        </div>
+                    </div>
+                    `;
+                }
+
+                return `
+                <div class="relative flex items-start space-x-2.5 z-10">
+                    <div class="w-6 h-6 rounded-full ${idx === 0 ? 'bg-amber-500 text-slate-950' : 'bg-slate-800 text-slate-300'} flex items-center justify-center font-bold text-[9px] shadow flex-shrink-0">
+                        ${idx + 1}
+                    </div>
+                    <div class="flex-1 bg-slate-950 border border-slate-800 rounded-xl p-2.5">
+                        <div class="flex justify-between items-center">
+                            <h3 class="font-bold text-slate-200 text-xs">${item.name}</h3>
+                            <span class="text-[9px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-400">${item.wait || '免排隊'}</span>
+                        </div>
+                        <p class="text-[10px] text-slate-400 mt-0.5"><i class="fa-regular fa-clock mr-1"></i>${item.time}</p>
+                        ${item.tag ? `<span class="text-[9px] text-amber-400 bg-amber-950/50 border border-amber-900/50 px-1.5 py-0.2 rounded mt-1 inline-block">${item.tag}</span>` : ''}
+                    </div>
+                </div>
+                `;
+            }).join('');
+        }
+
+        function addCustomSpot() {
+            const input = document.getElementById('new-spot-input');
+            const name = input.value.trim();
+            if (!name) return;
+
+            itinerarySpots.push({
+                id: Date.now(),
+                name: name,
+                time: "停留 45 分鐘",
+                wait: "排隊 10 分鐘",
+                tag: "自訂探索",
+                isRest: false
+            });
+            input.value = '';
+            renderItineraryTimeline();
+            showToast(`已新增景點: ${name}`);
+        }
+
+        function removeItineraryItem(id) {
+            itinerarySpots = itinerarySpots.filter(item => item.id !== id);
+            renderItineraryTimeline();
+        }
+
+        function optimizeTSPRoute() {
+            if (itinerarySpots.length <= 1) return;
+            // Simulated Travelling Salesperson Algorithm reordering
+            const first = itinerarySpots.shift();
+            itinerarySpots.reverse();
+            itinerarySpots.unshift(first);
+            renderItineraryTimeline();
+            showToast("已調用 TSP 算法優化行程順序，省時 25%！");
+        }
+
+        function applyCrowdAlternative() {
+            document.getElementById('crowd-alert-banner').classList.add('hidden');
+            itinerarySpots[0] = {
+                id: Date.now(),
+                name: "福隆新街葡國餐館 (避堵成功)",
+                time: "停留 50 分鐘",
+                wait: "免排隊",
+                tag: "成功避開大三巴人潮暴增",
+                isRest: false
+            };
+            renderItineraryTimeline();
+            showToast("已成功替換為「福隆新街」避堵路線！");
+        }
+
+        function insertRestToItinerary(spotName, minutes) {
+            itinerarySpots.splice(1, 0, {
+                id: Date.now(),
+                name: `[靜心休養] ${spotName}`,
+                time: `休息 ${minutes} 分鐘`,
+                tag: "降心率休養點",
+                isRest: true
+            });
+
+            // Lower fatigue score visually
+            const fatigueBar = document.getElementById('fatigue-score-bar');
+            const fatigueText = document.getElementById('fatigue-score-text');
+            if (fatigueBar && fatigueText) {
+                fatigueBar.style.width = '35%';
+                fatigueText.innerText = '35% (體能已恢復)';
+                fatigueText.className = 'font-bold text-emerald-400 text-xs';
+            }
+
+            renderItineraryTimeline();
+            showToast(`已插入 ${minutes} 分鐘靜心休養行程！`);
+        }
+
+        function addSpotToItineraryDirect(spotId) {
+            const spot = spotsData.find(s => s.id === spotId);
+            if (!spot) return;
+
+            itinerarySpots.push({
+                id: Date.now(),
+                spotId: spot.id,
+                name: spot.name,
+                time: "停留 45 分鐘",
+                wait: `排隊 ${spot.waitTime} 分`,
+                tag: "地圖一鍵加入",
+                isRest: spot.cat === 'rest'
+            });
+
+            renderItineraryTimeline();
+            showToast(`已加入「${spot.name}」到行程！`);
+        }
+
+        function addCurrentSpotToItinerary() {
+            if (selectedSpotId) {
+                addSpotToItineraryDirect(selectedSpotId);
+            }
+        }
+
+        function filterByRegion(region) {
+            currentRegionFilter = region;
+            document.querySelectorAll('.region-chip').forEach(btn => {
+                btn.className = 'region-chip bg-slate-800 text-slate-300 px-2.5 py-0.5 rounded-full flex-shrink-0 text-[11px]';
+            });
+            event.target.className = 'region-chip bg-amber-500 text-slate-950 font-bold px-2.5 py-0.5 rounded-full flex-shrink-0 text-[11px]';
+            updateMapMarkers();
+            renderSpotList();
+        }
+
+        function filterByCategory(cat) {
+            currentCategoryFilter = cat;
+            document.querySelectorAll('.cat-chip').forEach(btn => {
+                btn.className = 'cat-chip px-2 py-0.5 rounded-lg text-slate-400 text-[10px]';
+            });
+            event.target.className = 'cat-chip px-2 py-0.5 rounded-lg bg-amber-500 text-slate-950 font-bold text-[10px]';
+            updateMapMarkers();
+            renderSpotList();
+        }
+
+        function handleSpotSearch() {
+            renderSpotList();
+        }
+
+        function renderAnalyticsRanking() {
+            const container = document.getElementById('analytics-ranking-list');
+            const sorted = [...spotsData].sort((a,b) => b.waitTime - a.waitTime);
+
+            container.innerHTML = sorted.slice(0, 5).map((spot, idx) => `
+                <div class="flex items-center justify-between text-xs bg-slate-950 p-2 rounded-xl border border-slate-800">
+                    <div class="flex items-center space-x-2">
+                        <span class="w-4 h-4 rounded bg-slate-800 text-amber-400 font-bold flex items-center justify-center text-[10px]">${idx + 1}</span>
+                        <span class="text-slate-200 font-medium text-[11px]">${spot.name}</span>
+                    </div>
+                    <span class="text-[10px] font-bold ${spot.waitTime > 30 ? 'text-red-400' : 'text-emerald-400'}">
+                        ${spot.waitTime > 0 ? `排隊 ${spot.waitTime} 分` : '暢通無須排隊'}
+                    </span>
+                </div>
+            `).join('');
+        }
+
+        function initAnalyticsChart() {
+            const ctx = document.getElementById('crowdTrendChart')?.getContext('2d');
+            if (!ctx) return;
+
+            crowdChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: ['09:00', '11:00', '13:00', '15:00', '17:00', '19:00', '21:00'],
+                    datasets: [
+                        {
+                            label: '大三巴牌坊 (傳統熱點)',
+                            data: [10, 35, 55, 50, 40, 20, 10],
+                            borderColor: '#ef4444',
+                            backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                            fill: true,
+                            tension: 0.4
+                        },
+                        {
+                            label: '福隆新街 (避堵推薦)',
+                            data: [0, 5, 12, 10, 8, 5, 0],
+                            borderColor: '#10b981',
+                            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                            fill: true,
+                            tension: 0.4
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { labels: { color: '#94a3b8', font: { size: 9 } } } },
+                    scales: {
+                        x: { ticks: { color: '#64748b', font: { size: 9 } }, grid: { color: '#1e293b' } },
+                        y: { ticks: { color: '#64748b', font: { size: 9 } }, grid: { color: '#1e293b' } }
+                    }
+                }
+            });
+        }
+
+        function showSpotDetailModal(spotId) {
+            const spot = spotsData.find(s => s.id === spotId) || spotsData[0];
+            document.getElementById('modal-title').innerText = spot.name;
+            document.getElementById('modal-desc').innerText = spot.desc;
+            document.getElementById('modal-status').innerText = spot.waitTime > 25 ? '擁擠' : '暢通';
+            document.getElementById('modal-wait').innerText = `${spot.waitTime} 分鐘`;
+            document.getElementById('spot-modal').classList.remove('hidden');
+
+            const ctx = document.getElementById('modalChart')?.getContext('2d');
+            if (ctx) {
+                if (modalChartInstance) modalChartInstance.destroy();
+                modalChartInstance = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: ['10:00','12:00','14:00','16:00','18:00','20:00'],
+                        datasets: [{
+                            label: '排隊預測 (分)',
+                            data: spot.queueTrend.slice(0,6),
+                            backgroundColor: '#f59e0b'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: {
+                            x: { ticks: { color: '#64748b', font: { size: 8 } } },
+                            y: { ticks: { color: '#64748b', font: { size: 8 } } }
+                        }
+                    }
+                });
+            }
+        }
+
+        function closeSpotModal() {
+            document.getElementById('spot-modal').classList.add('hidden');
+        }
+
+        function addModalSpotToItinerary() {
+            if (selectedSpotId) {
+                addSpotToItineraryDirect(selectedSpotId);
+                closeSpotModal();
+            }
+        }
+
+        function switchTab(tabName) {
+            currentTab = tabName;
+            document.querySelectorAll('.tab-pane').forEach(el => el.classList.add('hidden'));
+            document.getElementById(`tab-${tabName}`).classList.remove('hidden');
+
+            document.querySelectorAll('.nav-btn').forEach(btn => btn.className = 'nav-btn flex flex-col items-center space-y-1 text-slate-400 hover:text-slate-200 transition');
+            document.getElementById(`nav-btn-${tabName}`).className = 'nav-btn flex flex-col items-center space-y-1 text-amber-400 transition';
+
+            if (tabName === 'map' && macauMap) {
+                setTimeout(() => macauMap.invalidateSize(), 200);
+            }
+        }
+
+        function showToast(message) {
+            const toast = document.createElement('div');
+            toast.className = 'fixed bottom-16 left-1/2 -translate-x-1/2 bg-slate-900/90 border border-slate-700 text-white text-xs px-3.5 py-2 rounded-full shadow-2xl z-50 transition-all duration-300 flex items-center space-x-2 backdrop-blur-md';
+            toast.innerHTML = `<i class="fa-solid fa-circle-check text-amber-400 text-xs"></i> <span>${message}</span>`;
+            document.body.appendChild(toast);
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                setTimeout(() => toast.remove(), 300);
+            }, 2200);
+        }
+    </script>
+</body>
+</html>
